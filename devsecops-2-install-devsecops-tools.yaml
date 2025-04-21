@@ -6,31 +6,33 @@ steps:
   - name: git-hound
     command: bash
     script: |
-      git clone https://github.com/tillson/git-hound.git && cd git-hound && go build .
-      echo "This step cloned and built git-hound and created a binary under ~/.blackdagger/git-hound. Before running it it is important that you should configure git-hound binary."
+      git clone https://github.com/tillson/git-hound.git ~/git-hound && cd ~/git-hound && go build .
+      echo "This step cloned and built git-hound and created a binary under ~/git-hound. Before running it it is important that you should configure git-hound binary."
       echo "There is a config.example.yml file under the mentioned directory. You should modify and rename it to config.yml. After that, you can use git-hound successfully."
       echo "For more information: https://github.com/tillson/git-hound"
     description: "Git Hound makes it easy to find exposed API keys on GitHub using pattern matching, targetted querying, and a scoring system. https://github.com/tillson/git-hound.git"
     depends:
     - gitleaks
+    continueOn:
+      failure: true
+      skipped: true
 
   - name: truffleHog
     command: bash
     script: |
-      cd /tmp && git clone https://github.com/trufflesecurity/trufflehog.git
-      cd trufflehog; go install
+      curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
     description: "Searches through git repositories for secrets, digging deep into commit history and branches. This is effective at finding secrets accidentally committed. https://github.com/trufflesecurity/trufflehog/tree/main"
     depends:
     - git-hound
 
   - name: detect-secrets
-    command: pip install detect-secrets
+    command: pipx install detect-secrets
     description: "An enterprise friendly way of detecting and preventing secrets in code. https://github.com/Yelp/detect-secrets"
     depends:
     - truffleHog
   
   - name: ggshield
-    command: pip install --user -U ggshield && export PATH=$PATH:$HOME/.local/bin
+    command: pipx install --user -U ggshield
     description: "ggshield is a secrets scanner for commits, branches, pull requests and more. It runs locally and integrates with GitHub, GitLab and BitBucket. https://github.com/gitguardian/ggshield"
     depends:
     - detect-secrets
@@ -43,7 +45,7 @@ steps:
 
   - name: syft
     command: bash
-    script: cd /tmp && curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b /usr/local/bin
+    script: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b /usr/local/bin
     description: "Syft is a tool for generating a Software Bill of Materials (SBOM) from container images and filesystems. https://github.com/anchore/syft"
     depends:
     - cdxgen
@@ -79,13 +81,13 @@ steps:
     - npm-check
       
   - name: semgrep
-    command: pip install semgrep #docker pull returntocorp/semgrep:latest
+    command: pipx install semgrep #docker pull returntocorp/semgrep:latest
     description: "Semgrep is a fast, open-source, static analysis tool for finding bugs and enforcing code standards at editor, commit, and CI time. https://github.com/semgrep/semgrep"
     depends:
     - brakeman
 
   - name: libsast
-    command: pip install libsast
+    command: pipx install libsast
     description: "A CLI tool to scan your JavaScript libraries for known vulnerabilities. https://github.com/ajinabraham/libsast"
     depends:
     - semgrep
@@ -98,13 +100,13 @@ steps:
 
   - name: gosec
     command: bash
-    script: curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.18.2
+    script: curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sudo sh -s -- -b $(go env GOPATH)/bin v2.18.2
     description: "Golang security checker. https://github.com/securego/gosec"
     depends:
     - sonarqube
 
   - name: safety
-    command: pip install safety
+    command: pipx install safety
     description: "Safety checks your installed dependencies for known security vulnerabilities. https://github.com/pyupio/safety"
     depends:
     - gosec
@@ -112,14 +114,18 @@ steps:
   - name: dependency-check
     command: bash
     script: |
-      wget https://github.com/jeremylong/DependencyCheck/releases/download/v9.0.7/dependency-check-9.0.7-release.zip &&
-      unzip dependency-check-9.0.7-release.zip
-    description: "OWASP dependency-check-cli is an command line tool that uses dependency-check-core to detect publicly disclosed vulnerabilities associated with the scanned project dependencies. https://github.com/jeremylong/DependencyCheck"
+      wget https://github.com/jeremylong/DependencyCheck/releases/download/v12.1.0/dependency-check-12.1.0-release.zip &&
+      unzip dependency-check-12.1.0-release.zip -d /usr/local/dependency-check && echo "export PATH=\"\$PATH:/usr/local/dependency-check/bin\"" >> ~/.bashrc && source ~/.bashrc &&
+      sudo rm -r dependency-check-12.1.0-release.zip
+    description: "OWASP Dependency-Check is an command line tool that uses dependency-check-core to detect publicly disclosed vulnerabilities associated with the scanned project dependencies. https://github.com/jeremylong/DependencyCheck"
     depends:
     - safety
   
   - name: zap-proxy
-    command: sudo snap install zaproxy --classic
+    command: bash
+    script: |
+      wget https://github.com/zaproxy/zaproxy/releases/download/v2.16.1/ZAP_2_16_1_unix.sh && chmod +x ZAP_2_16_1_unix.sh &&
+      sudo ./ZAP_2_16_1_unix.sh -q && sudo rm ZAP_2_16_1_unix.shs
     description: "The OWASP Zed Attack Proxy (ZAP) is one of the world’s most popular free security tools and is actively maintained by hundreds of international volunteers. https://www.zaproxy.org/download/"
     depends:
     - dependency-check

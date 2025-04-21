@@ -113,3 +113,13 @@ steps:
       else
           echo "Go is already installed."
       fi
+    depends:
+    - Install Ruby and RubyGems
+
+  - name: pipx
+    command: bash
+    script: |
+      sudo apt install pipx
+      pipx ensurepath
+    depends:
+    - Install Go

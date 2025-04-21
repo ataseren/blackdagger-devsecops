@@ -49,9 +49,9 @@ steps:
       else
           echo "Maven is already installed."
       fi
-      
     depends:
       - Install Go
+      
   - name: Install Node.js and npm
     command: bash
     script: |
